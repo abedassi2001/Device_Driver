@@ -30,7 +30,8 @@ ssize_t encdec_read_xor( struct file *filp, char *buf, size_t count, loff_t *f_p
 ssize_t encdec_write_xor(struct file *filp, const char *buf, size_t count, loff_t *f_pos);
 
 int memory_size = 0;
-
+char* buffer1
+char* buffer2
 MODULE_PARM(memory_size, "i");
 
 int major = 0;
@@ -172,7 +173,66 @@ int encdec_ioctl(struct inode *inode, struct file *filp, unsigned int cmd, unsig
 	return 0;
 }
 ssize_t encdec_write_caesar(struct file* filp, const char* buf, size_t count, loff_t* f_pos) {
-
+	 char buf3[memory_size];
+	 if (f_pos >= memory_size - 1) {
+		 return -ENOSPC;
+	 }
+	 if (copy_from_user(buf3, buf, count)) {
+		 kfree(buf3);
+		 return -EFAULT;
+	 }
+	int i = 0;
+	while (f_pos < memory_size && i<count) {
+		buffer1[f_pos] = ((buf3[i] + filp->private_data->key) % 128);
+		(*f_pos)++;
+		i++;
+	}
+	kfree(buf3);
+	return count;
+}
+ssize_t encdec_write_xor(struct file* filp, const char* buf, size_t count, loff_t* f_pos) {
+	char buf3[memory_size];
+	if (f_pos >= memory_size - 1) {
+		return -ENOSPC;
+	}
+	if (copy_from_user(buf3, buf, count)) {
+		kfree(buf3);
+		return -EFAULT;
+	}
+	int i = 0;
+	while (f_pos < memory_size && i < count) {
+		buffer2[f_pos] = (buf3[i] ^ filp->private_data->key);
+		(*f_pos)++;
+		i++;
+	}
+	kfree(buf3);
+	return count;
+}
+ssize_t encdec_read_caesar(struct file* filp, char* buf, size_t count, loff_t* f_pos) {
+	char buf3[memory_size];
+	if (f_pos >= memory_size - 1) {
+		return -ENOSPC;
+	}
+	int i = 0;
+	if (filp->private_data->read_state == ENCDEC_READ_STATE_RAW) {
+		while (f_pos < memory_size && i < count) {
+			buf[i] = buffer1[i];
+		}
+	}
+	else if (filp->private_data->read_state == ENCDEC_READ_STATE_DECRYPT) {
+		while (f_pos < memory_size && i < count) {
+			buf3[i] = (((buf3[i] - filp->private_data->key) + 128) % 128);
+		}
+	}
+	if (copy_to_user(buf3, buf, count)) {
+		kfree(buf3);
+		return -EFAULT;
+	}
+	
+	
+	kfree(buf3);
+	return count;
+}
 }
 // Add implementations for:
 // ------------------------
